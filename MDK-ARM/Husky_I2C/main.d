@@ -31,9 +31,10 @@ husky_i2c\main.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_i2c_ex.h
 husky_i2c\main.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_pwr.h
 husky_i2c\main.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_pwr_ex.h
 husky_i2c\main.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h
-husky_i2c\main.o: ../../Husky_I2C/Huskylens_driver.h
+husky_i2c\main.o: ../../Object_Tracking_Husky/Huskylens_driver.h
 husky_i2c\main.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdbool.h
 husky_i2c\main.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\string.h
 husky_i2c\main.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\math.h
-husky_i2c\main.o: ../../Husky_I2C/Dynamixel.h
-husky_i2c\main.o: ../../Husky_I2C/Fuzzy.h
+husky_i2c\main.o: ../../Object_Tracking_Husky/Dynamixel.h
+husky_i2c\main.o: ../../Object_Tracking_Husky/Fuzzy.h
+husky_i2c\main.o: ../../Object_Tracking_Husky/PID_driver.h

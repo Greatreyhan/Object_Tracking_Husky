@@ -24,11 +24,14 @@
 #include "Huskylens_driver.h"
 #include "Dynamixel.h"
 #include "Fuzzy.h"
+#include "PID_driver.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
+//#define USE_FUZZY
+#define USE_PID
+#define SAMPLE_TIME_S 0.01f
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -43,7 +46,9 @@
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c1;
 I2C_HandleTypeDef hi2c2;
+I2C_HandleTypeDef hi2c3;
 
+UART_HandleTypeDef huart4;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
@@ -56,6 +61,8 @@ static void MX_GPIO_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_I2C2_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_I2C3_Init(void);
+static void MX_UART4_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -71,11 +78,18 @@ huskylens_all_byid_t id;
 dynamixel_t ax;
 uint16_t sudut = 0;
 
+#ifdef USE_PID
+// PID kontrol pencarian korban
+PIDController pid_pk;
+#endif
+
+#ifdef USE_FUZZY
 Fuzzy_input_t input_fuzzy;
 Fuzzy_output_t output_fuzzy;
 Fuzzy_fuzzyfication_t fuz_fic_input;
 Fuzzy_defuz_t defuz;
 double res;	
+#endif
 /* USER CODE END 0 */
 
 /**
@@ -83,7 +97,6 @@ double res;
   * @retval int
   */
 int main(void)
-
 {
   /* USER CODE BEGIN 1 */
 
@@ -110,19 +123,31 @@ int main(void)
   MX_I2C1_Init();
   MX_I2C2_Init();
   MX_USART2_UART_Init();
+  MX_I2C3_Init();
+  MX_UART4_Init();
   /* USER CODE BEGIN 2 */
 	
+	#ifdef USE_FUZZY
 	fuzzy_set_membership_input(&input_fuzzy, 0, 160, 320);
 	fuzzy_set_membership_output(&output_fuzzy, -23, 0, 23);
+	#endif
 	
-	dyna_init(&huart2, &ax, 17);
-	dyna_scan(&ax, 0, 100,MOVING_CW);
+	#ifdef USE_PID
+	pid_pk.Kp = 1; 			pid_pk.Ki = 0; 			pid_pk.Kd = 1; 			pid_pk.tau = 0.02;
+	pid_pk.limMax = 30; 	pid_pk.limMin = -30; 	pid_pk.limMaxInt = 5; 	pid_pk.limMinInt = -5;
+	pid_pk.T_sample = SAMPLE_TIME_S;
+	PIDController_Init(&pid_pk);
+	float setpoint = 160;
+	#endif
 	
 	if(husky_setup(&hi2c2) == HUSKY_OK){
 		HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_12);
 	}
-	
 	huskAll = husky_getAllArrowBlock();
+	
+	dyna_init(&huart4, &ax, 0x11);
+	dyna_calibrate(&ax);
+	dyna_scan(&ax, 0, 100,MOVING_CW); 
 	
 	
   /* USER CODE END 2 */
@@ -139,6 +164,7 @@ int main(void)
 			sudut = dyna_read_posisition(&ax);
 //  		dyna_set_goal_position(&ax, sudut);
 			
+			#ifdef USE_FUZZY
 			fuzzy_fuzfication_input(&input_fuzzy, &fuz_fic_input, blocks.X_center);
 			fuzzy_logic_rule(&output_fuzzy, &fuz_fic_input, &defuz, FUZZY_MIN_TO_MAX);
 			res = fuzzy_defuz(&defuz,&fuz_fic_input);
@@ -151,6 +177,27 @@ int main(void)
 				dyna_set_moving_speed(&ax, 50, MOVING_CCW);
 				dyna_set_goal_position(&ax, sudut-res);
 			}
+			#endif
+			
+			#ifdef USE_PID
+			for (float t = 0.0f; t <= 5; t += SAMPLE_TIME_S) {
+
+        /* Get measurement from system */
+        float measurement = blocks.X_center;
+
+        /* Compute new control signal */
+        PIDController_Update(&pid_pk, setpoint, measurement);
+				
+				if(pid_pk.out >= 0){
+				dyna_set_moving_speed(&ax, 50, MOVING_CW);
+				dyna_set_goal_position(&ax, sudut+pid_pk.out);
+				}
+				else if(pid_pk.out < 0){
+					dyna_set_moving_speed(&ax, 50, MOVING_CCW);
+					dyna_set_goal_position(&ax, sudut+pid_pk.out);
+				}
+			}
+			#endif
 		}
 		
 		
@@ -282,6 +329,73 @@ static void MX_I2C2_Init(void)
 }
 
 /**
+  * @brief I2C3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C3_Init(void)
+{
+
+  /* USER CODE BEGIN I2C3_Init 0 */
+
+  /* USER CODE END I2C3_Init 0 */
+
+  /* USER CODE BEGIN I2C3_Init 1 */
+
+  /* USER CODE END I2C3_Init 1 */
+  hi2c3.Instance = I2C3;
+  hi2c3.Init.ClockSpeed = 100000;
+  hi2c3.Init.DutyCycle = I2C_DUTYCYCLE_2;
+  hi2c3.Init.OwnAddress1 = 0;
+  hi2c3.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c3.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c3.Init.OwnAddress2 = 0;
+  hi2c3.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c3.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C3_Init 2 */
+
+  /* USER CODE END I2C3_Init 2 */
+
+}
+
+/**
+  * @brief UART4 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_UART4_Init(void)
+{
+
+  /* USER CODE BEGIN UART4_Init 0 */
+
+  /* USER CODE END UART4_Init 0 */
+
+  /* USER CODE BEGIN UART4_Init 1 */
+
+  /* USER CODE END UART4_Init 1 */
+  huart4.Instance = UART4;
+  huart4.Init.BaudRate = 1000000;
+  huart4.Init.WordLength = UART_WORDLENGTH_8B;
+  huart4.Init.StopBits = UART_STOPBITS_1;
+  huart4.Init.Parity = UART_PARITY_NONE;
+  huart4.Init.Mode = UART_MODE_TX_RX;
+  huart4.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart4.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_HalfDuplex_Init(&huart4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN UART4_Init 2 */
+
+  /* USER CODE END UART4_Init 2 */
+
+}
+
+/**
   * @brief USART2 Initialization Function
   * @param None
   * @retval None
@@ -322,11 +436,14 @@ static void MX_USART2_UART_Init(void)
 static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
+/* USER CODE BEGIN MX_GPIO_Init_1 */
+/* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOC_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_RESET);
@@ -338,6 +455,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
+/* USER CODE BEGIN MX_GPIO_Init_2 */
+/* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
